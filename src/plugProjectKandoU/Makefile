@@ -59,6 +59,7 @@ KANDO_FILES:=\
 	$(BUILD_DIR)/asm/plugProjectKandoU/creatureLOD.o\
 	$(BUILD_DIR)/src/plugProjectKandoU/interactNavi.o\
 	$(BUILD_DIR)/asm/plugProjectKandoU/itemPikihead.o\
+	$(BUILD_DIR)/src/plugProjectKandoU/itemPikihead_mgr.o\
 	$(BUILD_DIR)/asm/plugProjectKandoU/itemPlant.o\
 	$(BUILD_DIR)/src/plugProjectKandoU/itemRock.o\
 	$(BUILD_DIR)/src/plugProjectKandoU/aiBreakRock.o\

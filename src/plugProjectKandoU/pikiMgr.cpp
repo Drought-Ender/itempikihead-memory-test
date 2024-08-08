@@ -12,6 +12,7 @@
 #include "Game/DeathMgr.h"
 #include "Game/Entities/ItemOnyon.h"
 #include "PikiAI.h"
+#include "LoadResource.h"
 #include "nans.h"
 
 namespace Game {
@@ -109,7 +110,7 @@ Piki* PikiMgr::birth()
 	}
 
 	case PikiMgr::PSM_Force:
-		return MonoObjectMgr::birth();
+		return birth2();
 
 	case PikiMgr::PSM_Replace: {
 		int pikiCount   = mActiveCount;
@@ -121,7 +122,7 @@ Piki* PikiMgr::birth()
 
 		Piki* piki = nullptr;
 		if (pikiCount + sproutCount < MAX_PIKI_COUNT) {
-			piki = MonoObjectMgr::birth();
+			piki = birth2();
 		}
 
 		if (!piki) {
@@ -141,7 +142,7 @@ Piki* PikiMgr::birth()
 				PikiKillArg killArg(CKILL_DontCountAsDeath);
 				toKill->kill(&killArg);
 
-				return MonoObjectMgr::birth();
+				return birth2();
 			}
 
 			return nullptr;
@@ -151,7 +152,30 @@ Piki* PikiMgr::birth()
 	}
 	}
 
-	return MonoObjectMgr::birth();
+	return birth2();
+}
+
+int PikiMgr::getSharedEmptyIndex() {
+	if (!ItemPikihead::mgr) return getEmptyIndex();
+
+	for (int i = 0; i < mMax; i++) {
+		if (mOpenIds[i] && ItemPikihead::mgr->mMonoObjectMgr.mOpenIds[i]) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+Piki* PikiMgr::birth2() {
+
+	int index = getSharedEmptyIndex();
+	if (index != -1) {
+		Piki* result = &mArray[index];
+		mOpenIds[index] = false;
+		mActiveCount++;
+		return result;
+	}
+	return nullptr;
 }
 
 /**
@@ -192,6 +216,7 @@ void PikiMgr::load(int viewNum)
 	loadBmd(Purple, "piki_p2_black");
 	loadBmd(Bulbmin, "piki_kochappy");
 	loadBmd(Carrot, "piki_ninjin");
+	loadPikihead(7);
 
 	mHappaModel[Leaf]    = J3DModelLoaderDataBase::load(arc->getResource("happa_model/leaf.bmd"), J3DMLF_Material_PE_FogOff);
 	mHappaModel[Bud]     = J3DModelLoaderDataBase::load(arc->getResource("happa_model/bud.bmd"), J3DMLF_UseUniqueMaterials | J3DMLF_19);
@@ -201,7 +226,7 @@ void PikiMgr::load(int viewNum)
 	    = J3DModelLoaderDataBase::load(arc->getResource("happa_model/flower_red.bmd"), J3DMLF_UseUniqueMaterials | J3DMLF_19);
 
 	sys->heapStatusStart("pikmin-ModelMgr", nullptr);
-	mModelMgr = new SysShape::ModelMgr(PikiColorCount, &mBluPikiModel, MAX_PIKI_COUNT, 0x20000, viewNum,
+	mModelMgr = new SysShape::ModelMgr(8, mPikiModels, MAX_PIKI_COUNT, 0x20000, viewNum,
 	                                   new Delegate1<PikiMgr, SysShape::Model*>(this, createModelCallback));
 	sys->heapStatusEnd("pikmin-ModelMgr");
 
@@ -238,7 +263,28 @@ void PikiMgr::loadBmd(int id, char* name)
 		data->makeSharedDL();
 	}
 
-	(&mBluPikiModel)[id] = data;
+	mPikiModels[id] = data;
+}
+
+void PikiMgr::loadPikihead(int id) {
+	LoadResource::Arg loadArg("user/Kando/objects/pikihead/arc.szs");
+	loadArg.mHeap = JKRGetCurrentHeap();
+
+	LoadResource::Node* loadNode = gLoadResourceMgr->mountArchive(loadArg);
+
+	P2ASSERT(loadNode);
+
+	J3DModelData* data = J3DModelLoaderDataBase::load(loadNode->mArchive->getResource("pikihead.bmd"), 0x20000);
+	{
+		const u32 lightObjNum = 0;
+		const u32 texGenNum   = 0;
+		const u32 texCoordNum = 4;
+		const u32 tevStageNum = 0;
+		u32 dlFlags           = CREATE_DIFF_FLAG(lightObjNum, texGenNum, texCoordNum, tevStageNum);
+		data->newSharedDisplayList(dlFlags);
+	}
+	
+	mPikiModels[id] = data;
 }
 
 /**
@@ -247,16 +293,22 @@ void PikiMgr::loadBmd(int id, char* name)
  */
 void PikiMgr::createModelCallback(SysShape::Model* model)
 {
-	model->mJ3dModel->calcMaterial();
-	model->mJ3dModel->makeDL();
-	model->mJ3dModel->lock();
+	
 }
 
 /**
  * @note Address: 0x8015EF54
  * @note Size: 0x24
  */
-SysShape::Model* PikiMgr::createModel(int id, int num) { return mModelMgr->createModel(id, num); }
+SysShape::Model* PikiMgr::createModel(int id, int num) { 
+	SysShape::Model* model = mModelMgr->createModel(id, num);
+	if (id < 7) {
+		model->mJ3dModel->calcMaterial();
+		model->mJ3dModel->makeDL();
+		model->mJ3dModel->lock();
+	}
+	return model;
+}
 
 /**
  * @note Address: 0x8015EF78

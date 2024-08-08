@@ -239,6 +239,10 @@ struct Mgr : public FixedSizeItemMgr<Item> {
 	virtual void* getStart();                                                         // _B4 (weak, thunk at _8C)
 	virtual void* getEnd();                                                           // _B8 (weak, thunk at _90)
 
+	SysShape::Model* createPikiheadModel(Item*);
+
+	int getEmptyIndex();
+
 	// _00     = VTBL
 	// _00-_7C = FixedSizeItemMgr
 };
