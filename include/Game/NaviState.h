@@ -517,6 +517,8 @@ struct NaviNukuAdjustState : public NaviState {
 	virtual void wallCallback(Navi*, Vector3f&);       // _2C
 	virtual bool ignoreAtari(Creature* toIgnore);      // _3C
 
+	void birthPiki(Navi* navi);
+
 	// _00     = VTBL
 	// _00-_10 = NaviState
 	f32 mAngleToPiki;               // _10

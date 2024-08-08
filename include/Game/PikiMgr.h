@@ -75,6 +75,8 @@ struct PikiMgr : public MonoObjectMgr<Piki> {
 	Piki* birth2();
 	int getSharedEmptyIndex();
 
+	static int sReplaceIndex;
+
 	static int mBirthMode;
 	static bool throwPikiDebug;
 

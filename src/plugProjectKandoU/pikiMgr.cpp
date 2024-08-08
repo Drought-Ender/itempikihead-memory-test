@@ -87,6 +87,8 @@ void PikiMgr::setupPiki(Piki* piki)
 	piki->mParms     = mParms;
 }
 
+int PikiMgr::sReplaceIndex;
+
 /**
  * @note Address: 0x8015E798
  * @note Size: 0x324
@@ -110,7 +112,10 @@ Piki* PikiMgr::birth()
 	}
 
 	case PikiMgr::PSM_Force:
-		return birth2();
+		Piki* result = &mArray[PikiMgr::sReplaceIndex];
+		mOpenIds[PikiMgr::sReplaceIndex] = false;
+		mActiveCount++;
+		return result;
 
 	case PikiMgr::PSM_Replace: {
 		int pikiCount   = mActiveCount;

@@ -11,6 +11,8 @@
 #include "nans.h"
 #include "Radar.h"
 #include "SoundID.h"
+#include "Game/NaviState.h"
+#include "Game/MapMgr.h"
 
 namespace Game
 {
@@ -99,7 +101,10 @@ Item* Mgr::birth()
 		break;
 
 	case PikiMgr::PSM_Force: // just make the damn sprout
-		break;
+		Item* result = &mMonoObjectMgr.mArray[PikiMgr::sReplaceIndex];
+		mMonoObjectMgr.mOpenIds[PikiMgr::sReplaceIndex] = false;
+		mMonoObjectMgr.mActiveCount++;
+		return result;
 
 	case PikiMgr::PSM_Replace:                      // we should not be entering a cave floor and immediately making a sprout lol
 		JUT_PANICLINE(834, "‚±‚ê‚Í‚ ‚è‚¦‚È‚¢‚æ\n"); // 'this is impossible' lol
@@ -141,7 +146,173 @@ void Mgr::onLoadResources()
 	// createMgr(100, 0x80000);
 }
 
+bool Item::interactFue(InteractFue& whistle)
+{
+	if (canPullout() != false && isAlive()) {
+		Navi* navi = static_cast<Navi*>(whistle.mCreature);
+		if (!navi->getOlimarData()->hasItem(OlimarData::ODII_ProfessionalNoisemaker)) {
+			return false;
+		}
+
+		if (gameSystem->isVersusMode()) {
+			if (mColor == navi->mNaviIndex) {
+				return false;
+			}
+		}
+
+		PikiMgr::mBirthMode    = PikiMgr::PSM_Force;
+		PikiMgr::sReplaceIndex = _184; 
+		Piki* piki          = pikiMgr->birth();
+		PikiMgr::mBirthMode = PikiMgr::PSM_Normal;
+
+		if (piki) {
+			P2ASSERTLINE(701, whistle.mCreature->isNavi());
+			kill(nullptr);
+			setAlive(false);
+
+			piki->init(nullptr);
+			piki->changeShape(mColor);
+			piki->changeHappa(mHeadType);
+			piki->mNavi = navi;
+			piki->setPosition(mPosition, false);
+			piki->mFsm->transit(piki, PIKISTATE_AutoNuki, nullptr);
+			return true;
+		}
+	}
+	return false;
+}
+
+void Item::doAI()
+{
+	mFsm->exec(this);
+	if (mAutopluckedTimer > 0.0f) {
+		mAutopluckedTimer -= sys->mDeltaTime;
+		if (mAutopluckedTimer <= 0.0f) {
+			PikiMgr::mBirthMode    = PikiMgr::PSM_Force;
+			PikiMgr::sReplaceIndex = _184;
+			Piki* piki          = pikiMgr->birth();
+			PikiMgr::mBirthMode = PikiMgr::PSM_Normal;
+			if (piki) {
+				kill(nullptr);
+				setAlive(false);
+
+				piki->init(nullptr);
+				piki->changeShape(mColor);
+				piki->changeHappa(mHeadType);
+				piki->mNavi = nullptr;
+				piki->setPosition(mPosition, false);
+				piki->mFsm->transit(piki, PIKISTATE_AutoNuki, nullptr);
+			} else {
+				JUT_PANICLINE(603, "exit failed !!\n");
+			}
+		}
+	}
+}
 
 } // namespace ItemPikiHead
+
+
+// birthPiki__Q24Game19NaviNukuAdjustStateFPQ24Game4Navi
+void NaviNukuAdjustState::birthPiki(Navi* navi) {
+	OSReport("void NaviNukuAdjustState::birthPiki(Navi* navi)\n");
+	PikiMgr::mBirthMode = PikiMgr::PSM_Force;
+	PikiMgr::sReplaceIndex = mPikiHead->_184;
+	Piki* piki          = pikiMgr->birth();
+	PikiMgr::mBirthMode = PikiMgr::PSM_Normal;
+
+	if (!piki) {
+		if (mIsFollowing) {
+			transit(navi, NSID_Follow, nullptr);
+		} else {
+			transit(navi, NSID_Walk, nullptr);
+		}
+		return;
+	}
+
+	u16 color = mPikiHead->mColor;
+	u16 happa = mPikiHead->mHeadType;
+	Vector3f sproutPos = mPikiHead->getPosition();
+
+	mPikiHead->kill(nullptr);
+	mPikiHead = nullptr;
+
+	piki->init(nullptr);
+	piki->changeShape(color);
+	piki->changeHappa(happa);
+
+	
+	piki->setPosition(sproutPos, false);
+	
+
+	NukareStateArg nukareArg;
+	nukareArg.mIsPlucking = navi->mPluckingCounter != 0;
+	nukareArg.mNavi       = navi;
+	piki->mFsm->transit(piki, PIKISTATE_Nukare, &nukareArg);
+
+	NaviNukuArg nukuArg;
+	nukuArg.mIsFollowing = mIsFollowing;
+
+	transit(navi, NSID_Nuku, &nukuArg);
+}
+
+bool PikiFallMeckState::becomePikihead(Piki* piki)
+{
+	OSReport("bool PikiFallMeckState::becomePikihead(Piki* piki)\n");
+	bool check;
+	if (GameStat::mePikis >= 99) {
+		return false;
+	} else {
+		PikiMgr::mBirthMode        = PikiMgr::PSM_Force;
+		PikiMgr::sReplaceIndex     = piki->mMgrIndex;
+		ItemPikihead::Item* sprout = static_cast<ItemPikihead::Item*>(ItemPikihead::mgr->birth());
+		PikiMgr::mBirthMode        = PikiMgr::PSM_Normal;
+
+		Vector3f pikiPos = piki->getPosition();
+		pikiPos.y        = mapMgr->getMinY(pikiPos);
+		if (sprout) {
+			if (piki->inWater()) {
+				efx::TEnemyDive fxDive;
+				efx::ArgScale fxArg(pikiPos, 1.2f);
+
+				fxDive.create(&fxArg);
+			} else {
+				efx::createSimplePkAp(pikiPos);
+				piki->startSound(PSSE_PK_SE_ONY_SEED_GROUND, true);
+			}
+
+			ItemPikihead::InitArg initArg((EPikiKind)piki->mPikiKind, Vector3f::zero, 1, 0, -1.0f);
+
+			if (mDoAutoPluck) {
+				initArg.mAutopluckTimer = 10.0f + 3.0f * sys->mDeltaTime;
+			}
+			CreatureKillArg killArg(CKILL_DontCountAsDeath);
+			piki->kill(&killArg);
+
+			sprout->init(&initArg);
+			sprout->setPosition(pikiPos, false);
+
+			
+
+			return true;
+		}
+	}
+	return false;
+}
+
+void PikiFallMeckState::bounceCallback(Piki* piki, Sys::Triangle* triangle)
+{
+	bool check;
+	if (mDoAutoPluck && triangle && ItemPikihead::mgr) {
+		if (becomePikihead(piki)) {
+			return;
+		}
+	} else if (triangle && !triangle->mCode.isBald() && piki->might_bury() && ItemPikihead::mgr) {
+		if (becomePikihead(piki)) {
+			return;
+		}
+	}
+
+	transit(piki, PIKISTATE_Walk, nullptr);
+}
 
 } // namespace Game
